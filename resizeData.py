@@ -11,16 +11,18 @@ if not os.path.exists(path + "/trainResized"):
 if not os.path.exists(path + "/testResized"):
     os.makedirs(path + "/testResized")
 
+img_size = 30
+
 trainFiles = glob.glob(path + "/train/*")
 for i, nameFile in enumerate(trainFiles):
     image = imread(nameFile)
-    imageResized = resize(image, (20, 20))
+    imageResized = resize(image, (img_size, img_size))
     newName = "/".join(nameFile.split("/")[:-1]) + "Resized/" + nameFile.split("/")[-1]
     imsave(newName, imageResized)
 
 testFiles = glob.glob(path + "/test/*")
 for i, nameFile in enumerate(testFiles):
     image = imread(nameFile)
-    imageResized = resize(image, (20, 20))
+    imageResized = resize(image, (img_size, img_size))
     newName = "/".join(nameFile.split("/")[:-1]) + "Resized/" + nameFile.split("/")[-1]
     imsave(newName, imageResized)
