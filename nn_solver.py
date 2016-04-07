@@ -39,15 +39,6 @@ def imp_img(img_name):
     return img
 
 
-def imp_img(img_name):
-    # read
-    img = imread(img_name)
-    # if gray convert to color
-    if len(img.shape) == 2:
-        img = gray2rgb(img)
-    return img
-
-
 @adapt_rgb(each_channel)
 def sobel_each(image):
     return filters.sobel(image)
@@ -55,8 +46,8 @@ def sobel_each(image):
 
 @adapt_rgb(each_channel)
 def rescale_intensity_each(image):
-    p0, p100 = np.percentile(img_file, (0, 100))
-    return exposure.rescale_intensity(image, in_range=(p0, p100))
+    plow, phigh = np.percentile(img_file, (10, 90))
+    return np.clip(exposure.rescale_intensity(image, in_range=(plow, phigh)), 0, 1)
 
 """
 Vars
@@ -248,3 +239,5 @@ sub_file.to_csv(submit_name)
 # Epoch 15, val_loss: 1.2972 - val_acc: 0.7069
 # each_rescale_intensity -> each_border -> rgb2gray -> rescale_intensity: Epoch 12, val_loss: 1.2152 - val_acc: 0.7037
 # each_equalize_hist -> each_border -> rgb2gray -> equalize_hist: Epoch 16, val_loss: 1.2984 - val_acc: 0.6846
+# each_rescale_intensity -> each_border -> rgb2gray -> rescale_intensity, sobel(10, 90):
+# Epoch 18, val_loss: 1.2860 - val_acc: 0.7094
