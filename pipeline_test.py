@@ -9,6 +9,7 @@ from skimage.color import gray2rgb, rgb2gray
 from skimage.transform import resize
 from skimage.color.adapt_rgb import adapt_rgb, each_channel, hsv_value
 from skimage import filters
+from skimage import exposure
 import matplotlib.pyplot as plt
 
 
@@ -42,7 +43,7 @@ def sobel_hsv(image):
     return filters.sobel(image)
 
 n_images = 64
-img_size = 40
+img_size = 30
 
 path = "data"
 train_names = sorted(glob.glob(path + "/train/*"))
@@ -68,5 +69,12 @@ img_draw(train_files, train_names)
 # Chane to gray
 for i, img_file in enumerate(train_files):
     train_files[i] = rgb2gray(img_file)
+
+img_draw(train_files, train_names)
+
+# Contrast stretching
+for i, img_file in enumerate(train_files):
+    p2, p98 = np.percentile(img_file, (2, 98))
+    train_files[i] = exposure.rescale_intensity(img_file, in_range=(p2, p98))
 
 img_draw(train_files, train_names)
