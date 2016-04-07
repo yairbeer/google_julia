@@ -65,7 +65,7 @@ for i, img_file in enumerate(train_files):
 
 img_draw(train_files, train_names)
 
-# Normalize
+# Chane to gray
 for i, img_file in enumerate(train_files):
     train_files[i] = rgb2gray(img_file)
 
