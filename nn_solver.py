@@ -87,7 +87,7 @@ for i, img_file in enumerate(test_files):
 """
 Configure train/test
 """
-
+np.random.seed(2016)
 cv_prob = np.random.sample(train_files.shape[0])
 train_cv_ind = cv_prob < 0.75
 test_cv_ind = cv_prob >= 0.75
