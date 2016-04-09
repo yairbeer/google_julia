@@ -1,14 +1,13 @@
 import glob
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 from skimage.io import imread
 from sklearn.preprocessing import LabelEncoder
 from skimage.color import gray2rgb, rgb2gray
 from skimage.color.adapt_rgb import adapt_rgb, each_channel
 from skimage import filters
 from skimage import exposure
-from skimage.restoration import denoise_tv_chambolle
-import matplotlib.pyplot as plt
 from keras.models import Sequential
 from keras.layers.core import Dense, Dropout, Activation, Flatten
 from keras.layers.convolutional import Convolution2D, MaxPooling2D
@@ -52,8 +51,8 @@ def rescale_intensity_each(image):
 """
 Vars
 """
-submit_name = 'cnn_sobeleach_gray_contrast_fix.csv'
-debug = True
+submit_name = 'cnn_sobeleach_gray_contrast_fix_added_layer.csv'
+debug = False
 debug_n = 64
 """
 Import images
@@ -149,9 +148,9 @@ Compile Model
 
 np.random.seed(1337)  # for reproducibility
 
-batch_size = 128
+batch_size = 196
 nb_classes = 62
-nb_epoch = 20
+nb_epoch = 50
 
 # input image dimensions
 img_rows, img_cols = img_size, img_size
@@ -180,10 +179,27 @@ model.add(Convolution2D(nb_filters, nb_conv, nb_conv,
                         border_mode='valid',
                         input_shape=(1, img_rows, img_cols)))
 model.add(Activation('relu'))
+"""
+inner layers start
+"""
+model.add(Convolution2D(nb_filters, nb_conv, nb_conv))
+model.add(Activation('tanh'))
+model.add(MaxPooling2D(pool_size=(nb_pool, nb_pool)))
+model.add(Dropout(0.25))
+model.add(Activation('tanh'))
 model.add(Convolution2D(nb_filters, nb_conv, nb_conv))
 model.add(Activation('relu'))
 model.add(MaxPooling2D(pool_size=(nb_pool, nb_pool)))
 model.add(Dropout(0.25))
+model.add(Activation('relu'))
+model.add(Convolution2D(nb_filters, nb_conv, nb_conv))
+model.add(Activation('relu'))
+model.add(MaxPooling2D(pool_size=(nb_pool, nb_pool)))
+model.add(Dropout(0.25))
+model.add(Activation('relu'))
+"""
+inner layers stop
+"""
 
 model.add(Flatten())
 model.add(Dense(128))
@@ -218,7 +234,7 @@ train_files_gray = train_files_gray.reshape(train_files_gray.shape[0], 1, img_ro
 test_files_gray = test_files_gray.reshape(test_files_gray.shape[0], 1, img_rows, img_cols)
 
 # Fit the whole train data
-# model.fit(train_files_gray, train_labels, batch_size=batch_size, nb_epoch=nb_epoch, show_accuracy=True, verbose=1)
+model.fit(train_files_gray, train_labels, batch_size=batch_size, nb_epoch=nb_epoch, show_accuracy=True, verbose=1)
 predicted_results = model.predict_classes(test_files_gray, batch_size=batch_size, verbose=1)
 predicted_results = label_encoder.inverse_transform(predicted_results)
 
@@ -241,3 +257,4 @@ sub_file.to_csv(submit_name)
 # each_equalize_hist -> each_border -> rgb2gray -> equalize_hist: Epoch 16, val_loss: 1.2984 - val_acc: 0.6846
 # each_rescale_intensity -> each_border -> rgb2gray -> rescale_intensity, sobel(10, 90):
 # Epoch 18, val_loss: 1.2860 - val_acc: 0.7094
+# Added Con + Max layers: Epoch 30, val_loss: 1.0905 - val_acc: 0.7297
