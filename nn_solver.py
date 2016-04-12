@@ -108,7 +108,7 @@ if debug:
     img_draw(train_files, train_names, debug_n)
 
 # Find corners and borders
-corner_w = 0
+corner_w = 0.2
 for i, img_file in enumerate(train_files):
     train_files[i, :, :, :] = corner_w * corner_each(img_file) + (1 - corner_w) * sobel_each(img_file)
 for i, img_file in enumerate(test_files):
@@ -155,7 +155,7 @@ n_fold = 4
 i_part = 1.0 / n_fold
 batch_size = 256
 nb_classes = 62
-nb_epoch = 20
+nb_epoch = 25
 
 np.random.seed(7)
 cv_prob = np.random.sample(train_files.shape[0])
@@ -163,7 +163,7 @@ cv_prob = np.random.sample(train_files.shape[0])
 # input image dimensions
 img_rows, img_cols = img_size, img_size
 # number of convolutional filters to use
-nb_filters = 32
+nb_filters = 16
 # size of pooling area for max pooling
 nb_pool = 2
 # convolution kernel size
@@ -207,10 +207,10 @@ for i_fold in range(n_fold):
     inner layers start
     """
     model.add(Convolution2D(nb_filters, nb_conv, nb_conv))
-    model.add(Activation('relu'))
+    model.add(Activation('tanh'))
     model.add(MaxPooling2D(pool_size=(nb_pool, nb_pool)))
     model.add(Dropout(0.25))
-    model.add(Activation('relu'))
+    model.add(Activation('tanh'))
     """
     inner layers stop
     """
