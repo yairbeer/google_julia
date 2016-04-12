@@ -7,12 +7,13 @@ from skimage.color import gray2rgb, rgb2gray
 from skimage.color.adapt_rgb import adapt_rgb, each_channel
 from skimage import filters
 from skimage import exposure
-from skimage.restoration import denoise_tv_chambolle
+from skimage.feature import corner_harris
 import matplotlib.pyplot as plt
 from keras.models import Sequential
 from keras.layers.core import Dense, Dropout, Activation, Flatten
 from keras.layers.convolutional import Convolution2D, MaxPooling2D
 from keras.utils import np_utils
+from keras.optimizers import SGD
 
 
 def img_draw(im_arr, im_names, n_imgs):
@@ -40,6 +41,11 @@ def imp_img(img_name):
 
 
 @adapt_rgb(each_channel)
+def corner_each(image):
+    return corner_harris(image)
+
+
+@adapt_rgb(each_channel)
 def sobel_each(image):
     return filters.sobel(image)
 
@@ -52,8 +58,8 @@ def rescale_intensity_each(image):
 """
 Vars
 """
-submit_name = 'cnn_sobeleach_gray_contrast_fix.csv'
-debug = True
+submit_name = 'cnn_sobelcornereach_gray_contrast.csv'
+debug = False
 debug_n = 64
 """
 Import images
@@ -101,11 +107,18 @@ for i, img_file in enumerate(test_files):
 if debug:
     img_draw(train_files, train_names, debug_n)
 
-# Find borders
+# Find corners and borders
+corner_w = 0.1
 for i, img_file in enumerate(train_files):
-    train_files[i, :, :, :] = sobel_each(img_file)
+    train_files[i, :, :, :] = corner_w * corner_each(img_file) + (1 - corner_w) * sobel_each(img_file)
 for i, img_file in enumerate(test_files):
-    test_files[i, :, :, :] = sobel_each(img_file)
+    test_files[i, :, :, :] = corner_w * corner_each(img_file) + (1 - corner_w) * sobel_each(img_file)
+
+# Contrast streching
+for i, img_file in enumerate(train_files):
+    train_files[i, :, :, :] = rescale_intensity_each(img_file)
+for i, img_file in enumerate(test_files):
+    test_files[i, :, :, :] = rescale_intensity_each(img_file)
 
 if debug:
     img_draw(train_files, train_names, debug_n)
@@ -137,21 +150,15 @@ if debug:
 Configure train/test
 """
 np.random.seed(2016)
-cv_prob = np.random.sample(train_files.shape[0])
-train_cv_ind = cv_prob < 0.75
-test_cv_ind = cv_prob >= 0.75
-X_train, y_train = train_files_gray[train_cv_ind, :, :], train_labels[train_cv_ind]
-X_test, y_test = train_files_gray[test_cv_ind, :, :], train_labels[test_cv_ind]
 
-"""
-Compile Model
-"""
-
-np.random.seed(1337)  # for reproducibility
-
-batch_size = 128
+n_fold = 2
+i_part = 1.0 / n_fold
+batch_size = 256
 nb_classes = 62
-nb_epoch = 20
+nb_epoch = 2
+
+np.random.seed(7)
+cv_prob = np.random.sample(train_files.shape[0])
 
 # input image dimensions
 img_rows, img_cols = img_size, img_size
@@ -162,54 +169,80 @@ nb_pool = 2
 # convolution kernel size
 nb_conv = 3
 
-# the data, shuffled and split between train and test sets
-X_train = X_train.reshape(X_train.shape[0], 1, img_rows, img_cols)
-X_test = X_test.reshape(X_test.shape[0], 1, img_rows, img_cols)
-
-print('X_train shape:', X_train.shape)
-print(X_train.shape[0], 'train samples')
-print(X_test.shape[0], 'test samples')
-
 # convert class vectors to binary class matrices
-Y_train = np_utils.to_categorical(y_train, nb_classes)
-Y_test = np_utils.to_categorical(y_test, nb_classes)
+train_labels_dummy = np_utils.to_categorical(train_labels, nb_classes)
 
-model = Sequential()
+test_results = []
+acc = []
+for i_fold in range(n_fold):
+    # Get driver - image relation table
 
-model.add(Convolution2D(nb_filters, nb_conv, nb_conv,
-                        border_mode='valid',
-                        input_shape=(1, img_rows, img_cols)))
-model.add(Activation('relu'))
-model.add(Convolution2D(nb_filters, nb_conv, nb_conv))
-model.add(Activation('relu'))
-model.add(MaxPooling2D(pool_size=(nb_pool, nb_pool)))
-model.add(Dropout(0.25))
+    train_cv_ind = np.logical_and(i_fold * i_part <= cv_prob, i_fold * i_part > cv_prob)
+    test_cv_ind = not(np.logical_and(i_fold * i_part <= cv_prob, i_fold * i_part > cv_prob))
+    X_train, y_train = train_files_gray[train_cv_ind, :, :], train_labels_dummy[train_cv_ind]
+    X_test, y_test = train_files_gray[test_cv_ind, :, :], train_labels_dummy[test_cv_ind]
 
-model.add(Flatten())
-model.add(Dense(128))
-model.add(Activation('relu'))
-model.add(Dropout(0.5))
-model.add(Dense(nb_classes))
-model.add(Activation('softmax'))
+    """
+    Compile Model
+    """
+    # the data, shuffled and split between train and test sets
+    X_train = X_train.reshape(X_train.shape[0], 1, img_rows, img_cols)
+    X_test = X_test.reshape(X_test.shape[0], 1, img_rows, img_cols)
+    Y_train = np_utils.to_categorical(y_train, nb_classes)
+    Y_test = np_utils.to_categorical(y_test, nb_classes)
 
-model.compile(loss='categorical_crossentropy', optimizer='adadelta')
+    print(X_train.shape[0], 'train samples')
+    print(X_test.shape[0], 'test samples')
 
-"""
-CV model
-"""
-model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch,
-          show_accuracy=True, verbose=1, validation_data=(X_test, Y_test))
-score = model.evaluate(X_test, Y_test, show_accuracy=True, verbose=0)
-print('Test score:', score[0])
-print('Test accuracy:', score[1])
+    np.random.seed(1007)  # for reproducibility
 
-"""
-Get accuracy
-"""
-predicted_results = model.predict_classes(X_test, batch_size=batch_size, verbose=1)
-print(label_encoder.inverse_transform(predicted_results))
-print(label_encoder.inverse_transform(y_test))
+    """
+    CV model
+    """
+    model = Sequential()
+    model.add(Convolution2D(nb_filters, nb_conv, nb_conv,
+                            border_mode='valid', input_shape=(1, img_rows, img_cols)))
+    model.add(Activation('relu'))
 
+    """
+    inner layers start
+    """
+    model.add(Convolution2D(nb_filters, nb_conv, nb_conv))
+    model.add(Activation('relu'))
+    model.add(MaxPooling2D(pool_size=(nb_pool, nb_pool)))
+    model.add(Dropout(0.25))
+    model.add(Activation('relu'))
+    """
+    inner layers stop
+    """
+
+    model.add(Flatten())
+    model.add(Dense(128))
+    model.add(Activation('relu'))
+    model.add(Dropout(0.5))
+    model.add(Dense(nb_classes))
+    model.add(Activation('softmax'))
+    sgd = SGD(lr=0.1, decay=1e-6, momentum=0.9, nesterov=True)
+    model.compile(loss='categorical_crossentropy', optimizer=sgd)
+    model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch,
+              show_accuracy=True, verbose=1, validation_data=(X_test, Y_test), shuffle=True)
+
+    """
+    Get accuracy
+    """
+    score = model.evaluate(X_test, Y_test, verbose=0)
+    print('Test score:', score[0])
+    print('Test accuracy:', score[1])
+    acc.append(score[1])
+
+    predicted_results = model.predict_classes(X_test, batch_size=batch_size, verbose=1)
+    print(label_encoder.inverse_transform(predicted_results))
+    print(label_encoder.inverse_transform(y_test))
+
+    """
+    Solve and submit test
+    """
+print('The accuracy is %.2f' % np.mean(acc))
 """
 Solve and submit test
 """
