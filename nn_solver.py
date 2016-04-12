@@ -7,7 +7,7 @@ from skimage.color import gray2rgb, rgb2gray
 from skimage.color.adapt_rgb import adapt_rgb, each_channel
 from skimage import filters
 from skimage import exposure
-from skimage.feature import corner_harris
+from skimage.restoration import denoise_tv_chambolle
 import matplotlib.pyplot as plt
 from keras.models import Sequential
 from keras.layers.core import Dense, Dropout, Activation, Flatten
