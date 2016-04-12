@@ -108,7 +108,7 @@ if debug:
     img_draw(train_files, train_names, debug_n)
 
 # Find corners and borders
-corner_w = 0.1
+corner_w = 0
 for i, img_file in enumerate(train_files):
     train_files[i, :, :, :] = corner_w * corner_each(img_file) + (1 - corner_w) * sobel_each(img_file)
 for i, img_file in enumerate(test_files):
@@ -151,11 +151,11 @@ Configure train/test
 """
 np.random.seed(2016)
 
-n_fold = 2
+n_fold = 4
 i_part = 1.0 / n_fold
 batch_size = 256
 nb_classes = 62
-nb_epoch = 2
+nb_epoch = 20
 
 np.random.seed(7)
 cv_prob = np.random.sample(train_files.shape[0])
@@ -175,12 +175,11 @@ train_labels_dummy = np_utils.to_categorical(train_labels, nb_classes)
 test_results = []
 acc = []
 for i_fold in range(n_fold):
-    # Get driver - image relation table
 
-    train_cv_ind = np.logical_and(i_fold * i_part <= cv_prob, i_fold * i_part > cv_prob)
-    test_cv_ind = not(np.logical_and(i_fold * i_part <= cv_prob, i_fold * i_part > cv_prob))
-    X_train, y_train = train_files_gray[train_cv_ind, :, :], train_labels_dummy[train_cv_ind]
-    X_test, y_test = train_files_gray[test_cv_ind, :, :], train_labels_dummy[test_cv_ind]
+    test_cv_ind = np.logical_and(i_fold * i_part <= cv_prob, (i_fold + 1) * i_part > cv_prob)
+    train_cv_ind = np.logical_not(np.logical_and(i_fold * i_part <= cv_prob, (i_fold + 1) * i_part > cv_prob))
+    X_train, y_train = train_files_gray[train_cv_ind, :, :], train_labels[train_cv_ind]
+    X_test, y_test = train_files_gray[test_cv_ind, :, :], train_labels[test_cv_ind]
 
     """
     Compile Model
@@ -230,7 +229,7 @@ for i_fold in range(n_fold):
     """
     Get accuracy
     """
-    score = model.evaluate(X_test, Y_test, verbose=0)
+    score = model.evaluate(X_test, Y_test, verbose=0, show_accuracy=True)
     print('Test score:', score[0])
     print('Test accuracy:', score[1])
     acc.append(score[1])
@@ -242,16 +241,15 @@ for i_fold in range(n_fold):
     """
     Solve and submit test
     """
-print('The accuracy is %.2f' % np.mean(acc))
+print('The accuracy is %.3f' % np.mean(acc))
 """
 Solve and submit test
 """
-train_labels = np_utils.to_categorical(train_labels, nb_classes)
 train_files_gray = train_files_gray.reshape(train_files_gray.shape[0], 1, img_rows, img_cols)
 test_files_gray = test_files_gray.reshape(test_files_gray.shape[0], 1, img_rows, img_cols)
 
 # Fit the whole train data
-# model.fit(train_files_gray, train_labels, batch_size=batch_size, nb_epoch=nb_epoch, show_accuracy=True, verbose=1)
+model.fit(train_files_gray, train_labels_dummy, batch_size=batch_size, nb_epoch=nb_epoch, show_accuracy=True, verbose=1)
 predicted_results = model.predict_classes(test_files_gray, batch_size=batch_size, verbose=1)
 predicted_results = label_encoder.inverse_transform(predicted_results)
 
