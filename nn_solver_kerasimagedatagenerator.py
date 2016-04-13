@@ -7,7 +7,7 @@ from skimage.color import gray2rgb, rgb2gray
 from skimage.color.adapt_rgb import adapt_rgb, each_channel
 from skimage import filters
 from skimage import exposure
-from skimage.feature import corner_harris
+from skimage.transform import rotate
 import matplotlib.pyplot as plt
 from keras.models import Sequential
 from keras.layers.core import Dense, Dropout, Activation, Flatten
@@ -32,6 +32,21 @@ def img_draw(im_arr, im_names, n_imgs):
     plt.show()
 
 
+def img_draw_test(im_arr, im_names, n_imgs):
+    plt.figure(1)
+    n_rows = int(np.sqrt(n_imgs))
+    n_cols = n_imgs / n_rows
+    for img_i in range(n_imgs):
+        plt.subplot(n_cols, n_rows, img_i + 1)
+        plt.title(im_names[img_i])
+        if len(im_arr.shape) == 4:
+            img = im_arr[img_i]
+        else:
+            img = im_arr[img_i]
+        plt.imshow(img)
+    plt.show()
+
+
 def imp_img(img_name):
     # read
     img = imread(img_name)
@@ -39,11 +54,6 @@ def imp_img(img_name):
     if len(img.shape) == 2:
         img = gray2rgb(img)
     return img
-
-
-@adapt_rgb(each_channel)
-def corner_each(image):
-    return corner_harris(image)
 
 
 @adapt_rgb(each_channel)
@@ -59,7 +69,7 @@ def rescale_intensity_each(image, low, high):
 """
 Vars
 """
-submit_name = 'ImageDataGenerator_64.csv'
+submit_name = 'ImageDataGenerator_tst.csv'
 debug = False
 n_fold = 2
 debug_n = 100
@@ -109,12 +119,11 @@ for i, img_file in enumerate(test_files):
 if debug:
     img_draw(train_files, train_names, debug_n)
 
-# Find corners and borders
-corner_w = 0
+# Find and borders
 for i, img_file in enumerate(train_files):
-    train_files[i, :, :, :] = corner_w * corner_each(img_file) + (1 - corner_w) * sobel_each(img_file)
+    train_files[i, :, :, :] = sobel_each(img_file)
 for i, img_file in enumerate(test_files):
-    test_files[i, :, :, :] = corner_w * corner_each(img_file) + (1 - corner_w) * sobel_each(img_file)
+    test_files[i, :, :, :] = sobel_each(img_file)
 
 # Contrast streching
 for i, img_file in enumerate(train_files):
@@ -156,7 +165,7 @@ np.random.seed(2016)
 i_part = 1.0 / n_fold
 batch_size = 128
 nb_classes = 62
-nb_epoch = 300
+nb_epoch = 20
 
 np.random.seed(7)
 cv_prob = np.random.sample(train_files.shape[0])
@@ -221,7 +230,7 @@ for i_fold in range(n_fold):
     """
     model.add(Dense(nb_classes))
     model.add(Activation('softmax'))
-    sgd = SGD(lr=0.03, decay=1e-6, momentum=0.9, nesterov=True)
+    sgd = SGD(lr=0.03, decay=1e-5, momentum=0.7, nesterov=True)
     model.compile(loss='categorical_crossentropy', optimizer=sgd)
     model.reset_states()
     # this will do preprocessing and realtime data augmentation
@@ -260,6 +269,9 @@ for i_fold in range(n_fold):
     print(label_encoder.inverse_transform(predicted_results))
     print(label_encoder.inverse_transform(y_test))
 
+    unsuccesful_predict = np.logical_not(predicted_results == y_test)
+    img_draw_test(X_test[unsuccesful_predict, 0, :, :], label_encoder.inverse_transform(y_test[unsuccesful_predict]),
+                  debug_n)
 if n_fold > 1:
     print('The accuracy is %.3f' % np.mean(acc))
 """
@@ -281,7 +293,7 @@ datagen = ImageDataGenerator(
     featurewise_std_normalization=False,  # divide inputs by std of the dataset
     samplewise_std_normalization=False,  # divide each input by its std
     zca_whitening=False,  # apply ZCA whitening
-    rotation_range=180,  # randomly rotate images in the range (degrees, 0 to 180)
+    rotation_range=10,  # randomly rotate images in the range (degrees, 0 to 180)
     width_shift_range=0.1,  # randomly shift images horizontally (fraction of total width)
     height_shift_range=0.1,  # randomly shift images vertically (fraction of total height)
     horizontal_flip=False,  # randomly flip images
