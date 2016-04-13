@@ -14,6 +14,7 @@ from keras.layers.core import Dense, Dropout, Activation, Flatten
 from keras.layers.convolutional import Convolution2D, MaxPooling2D
 from keras.utils import np_utils
 from keras.optimizers import SGD
+from keras.preprocessing.image import ImageDataGenerator
 
 
 def img_draw(im_arr, im_names, n_imgs):
@@ -58,8 +59,9 @@ def rescale_intensity_each(image, low, high):
 """
 Vars
 """
-submit_name = 'cnn_sobelcornereach_gray_contrast.csv'
+submit_name = 'ImageDataGenerator.csv'
 debug = False
+n_fold = 2
 debug_n = 64
 """
 Import images
@@ -151,11 +153,10 @@ Configure train/test
 """
 np.random.seed(2016)
 
-n_fold = 4
 i_part = 1.0 / n_fold
-batch_size = 256
+batch_size = 128
 nb_classes = 62
-nb_epoch = 25
+nb_epoch = 60
 
 np.random.seed(7)
 cv_prob = np.random.sample(train_files.shape[0])
@@ -163,7 +164,7 @@ cv_prob = np.random.sample(train_files.shape[0])
 # input image dimensions
 img_rows, img_cols = img_size, img_size
 # number of convolutional filters to use
-nb_filters = 16
+nb_filters = 32
 # size of pooling area for max pooling
 nb_pool = 2
 # convolution kernel size
@@ -172,84 +173,126 @@ nb_conv = 3
 # convert class vectors to binary class matrices
 train_labels_dummy = np_utils.to_categorical(train_labels, nb_classes)
 
+model = Sequential()
+"""
+inner layers start
+"""
+model.add(Convolution2D(nb_filters, nb_conv, nb_conv,
+                        border_mode='valid', input_shape=(1, img_rows, img_cols)))
+model.add(Activation('relu'))
+model.add(Convolution2D(nb_filters, nb_conv, nb_conv))
+model.add(Activation('relu'))
+model.add(MaxPooling2D(pool_size=(nb_pool, nb_pool)))
+model.add(Dropout(0.25))
+model.add(Activation('relu'))
+model.add(Flatten())
+model.add(Dense(256))
+model.add(Activation('relu'))
+model.add(Dropout(0.5))
+"""
+inner layers stop
+"""
+model.add(Dense(nb_classes))
+model.add(Activation('softmax'))
+sgd = SGD(lr=0.03, decay=1e-6, momentum=0.9, nesterov=True)
+
 test_results = []
 acc = []
-for i_fold in range(n_fold):
+if n_fold > 1:
+    for i_fold in range(n_fold):
 
-    test_cv_ind = np.logical_and(i_fold * i_part <= cv_prob, (i_fold + 1) * i_part > cv_prob)
-    train_cv_ind = np.logical_not(np.logical_and(i_fold * i_part <= cv_prob, (i_fold + 1) * i_part > cv_prob))
-    X_train, y_train = train_files_gray[train_cv_ind, :, :], train_labels[train_cv_ind]
-    X_test, y_test = train_files_gray[test_cv_ind, :, :], train_labels[test_cv_ind]
+        test_cv_ind = np.logical_and(i_fold * i_part <= cv_prob, (i_fold + 1) * i_part > cv_prob)
+        train_cv_ind = np.logical_not(np.logical_and(i_fold * i_part <= cv_prob, (i_fold + 1) * i_part > cv_prob))
+        X_train, y_train = train_files_gray[train_cv_ind, :, :], train_labels[train_cv_ind]
+        X_test, y_test = train_files_gray[test_cv_ind, :, :], train_labels[test_cv_ind]
 
-    """
-    Compile Model
-    """
-    # the data, shuffled and split between train and test sets
-    X_train = X_train.reshape(X_train.shape[0], 1, img_rows, img_cols)
-    X_test = X_test.reshape(X_test.shape[0], 1, img_rows, img_cols)
-    Y_train = np_utils.to_categorical(y_train, nb_classes)
-    Y_test = np_utils.to_categorical(y_test, nb_classes)
+        """
+        Compile Model
+        """
+        # the data, shuffled and split between train and test sets
+        X_train = X_train.reshape(X_train.shape[0], 1, img_rows, img_cols)
+        X_test = X_test.reshape(X_test.shape[0], 1, img_rows, img_cols)
+        Y_train = np_utils.to_categorical(y_train, nb_classes)
+        Y_test = np_utils.to_categorical(y_test, nb_classes)
 
-    print(X_train.shape[0], 'train samples')
-    print(X_test.shape[0], 'test samples')
+        print(X_train.shape[0], 'train samples')
+        print(X_test.shape[0], 'test samples')
 
-    np.random.seed(1007)  # for reproducibility
+        np.random.seed(1007)  # for reproducibility
+        model.compile(loss='categorical_crossentropy', optimizer=sgd)
 
-    """
-    CV model
-    """
-    model = Sequential()
-    model.add(Convolution2D(nb_filters, nb_conv, nb_conv,
-                            border_mode='valid', input_shape=(1, img_rows, img_cols)))
-    model.add(Activation('relu'))
+        # this will do preprocessing and realtime data augmentation
+        datagen = ImageDataGenerator(
+            featurewise_center=False,  # set input mean to 0 over the dataset
+            samplewise_center=False,  # set each sample mean to 0
+            featurewise_std_normalization=False,  # divide inputs by std of the dataset
+            samplewise_std_normalization=False,  # divide each input by its std
+            zca_whitening=False,  # apply ZCA whitening
+            rotation_range=20,  # randomly rotate images in the range (degrees, 0 to 180)
+            width_shift_range=0.1,  # randomly shift images horizontally (fraction of total width)
+            height_shift_range=0.1,  # randomly shift images vertically (fraction of total height)
+            horizontal_flip=False,  # randomly flip images
+            vertical_flip=False)  # randomly flip images
 
-    """
-    inner layers start
-    """
-    model.add(Convolution2D(nb_filters, nb_conv, nb_conv))
-    model.add(Activation('relu'))
-    model.add(MaxPooling2D(pool_size=(nb_pool, nb_pool)))
-    model.add(Dropout(0.25))
-    model.add(Activation('relu'))
-    """
-    inner layers stop
-    """
+        # compute quantities required for featurewise normalization
+        # (std, mean, and principal components if ZCA whitening is applied)
+        datagen.fit(X_train)
 
-    model.add(Flatten())
-    model.add(Dense(256))
-    model.add(Activation('relu'))
-    model.add(Dropout(0.5))
-    model.add(Dense(nb_classes))
-    model.add(Activation('softmax'))
-    sgd = SGD(lr=0.1, decay=1e-6, momentum=0.9, nesterov=True)
-    model.compile(loss='categorical_crossentropy', optimizer=sgd)
-    model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch,
-              show_accuracy=True, verbose=1, validation_data=(X_test, Y_test), shuffle=True)
+        # fit the model on the batches generated by datagen.flow()
+        model.fit_generator(datagen.flow(X_train, Y_train,
+                                         batch_size=batch_size),
+                            samples_per_epoch=X_train.shape[0],
+                            nb_epoch=nb_epoch, show_accuracy=True, verbose=1,
+                            validation_data=(X_test, Y_test))
 
-    """
-    Get accuracy
-    """
-    score = model.evaluate(X_test, Y_test, verbose=0, show_accuracy=True)
-    print('Test score:', score[0])
-    print('Test accuracy:', score[1])
-    acc.append(score[1])
+        """
+        Get accuracy
+        """
+        score = model.evaluate(X_test, Y_test, verbose=0, show_accuracy=True)
+        print('Test score:', score[0])
+        print('Test accuracy:', score[1])
+        acc.append(score[1])
 
-    predicted_results = model.predict_classes(X_test, batch_size=batch_size, verbose=1)
-    print(label_encoder.inverse_transform(predicted_results))
-    print(label_encoder.inverse_transform(y_test))
+        predicted_results = model.predict_classes(X_test, batch_size=batch_size, verbose=1)
+        print(label_encoder.inverse_transform(predicted_results))
+        print(label_encoder.inverse_transform(y_test))
 
-    """
-    Solve and submit test
-    """
-print('The accuracy is %.3f' % np.mean(acc))
+        """
+        Solve and submit test
+        """
+    print('The accuracy is %.3f' % np.mean(acc))
 """
 Solve and submit test
 """
-train_files_gray = train_files_gray.reshape(train_files_gray.shape[0], 1, img_rows, img_cols)
-test_files_gray = test_files_gray.reshape(test_files_gray.shape[0], 1, img_rows, img_cols)
+
+np.random.seed(1007)  # for reproducibility
+model.compile(loss='categorical_crossentropy', optimizer=sgd)
+
+# the data, shuffled and split between train and test sets
+train_files_gray = train_files_gray.reshape(train_files.shape[0], 1, img_rows, img_cols)
+test_files_gray = test_files_gray.reshape(test_files.shape[0], 1, img_rows, img_cols)
 
 # Fit the whole train data
-model.fit(train_files_gray, train_labels_dummy, batch_size=batch_size, nb_epoch=nb_epoch, show_accuracy=True, verbose=1)
+# this will do preprocessing and realtime data augmentation
+datagen = ImageDataGenerator(
+    featurewise_center=False,  # set input mean to 0 over the dataset
+    samplewise_center=False,  # set each sample mean to 0
+    featurewise_std_normalization=False,  # divide inputs by std of the dataset
+    samplewise_std_normalization=False,  # divide each input by its std
+    zca_whitening=False,  # apply ZCA whitening
+    rotation_range=0,  # randomly rotate images in the range (degrees, 0 to 180)
+    width_shift_range=0.1,  # randomly shift images horizontally (fraction of total width)
+    height_shift_range=0.1,  # randomly shift images vertically (fraction of total height)
+    horizontal_flip=False,  # randomly flip images
+    vertical_flip=False)  # randomly flip images
+
+# compute quantities required for featurewise normalization
+# (std, mean, and principal components if ZCA whitening is applied)
+datagen.fit(train_files_gray)
+
+# fit the model on the batches generated by datagen.flow()
+model.fit_generator(datagen.flow(train_files_gray, train_labels_dummy, batch_size=batch_size),
+                    samples_per_epoch=train_files.shape[0], nb_epoch=nb_epoch, show_accuracy=True, verbose=1)
 predicted_results = model.predict_classes(test_files_gray, batch_size=batch_size, verbose=1)
 predicted_results = label_encoder.inverse_transform(predicted_results)
 
