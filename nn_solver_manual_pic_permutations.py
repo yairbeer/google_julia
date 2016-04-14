@@ -69,13 +69,24 @@ def img_leftright(img, right):
     right_pixels = int(w * right)
     tmp_img = np.zeros(img.shape)
     if right_pixels > 0:
-        tmp_img[right_pixels:, :] = img[: - right_pixels, :]
+        tmp_img[:, right_pixels:] = img[:, : (-1 * right_pixels)]
     else:
         if right_pixels < 0:
-            tmp_img[: right_pixels, :] = img[-right_pixels:, :]
+            tmp_img[:, : right_pixels] = img[:, (-1 * right_pixels):]
         else:
             tmp_img = img
     return tmp_img
+
+
+def img_rotate(img, rotate, corner_deg_chance):
+    rot_chance = np.random.random()
+    if rot_chance < corner_deg_chance:
+        return tf.rotate(img, 90)
+    if corner_deg_chance <= rot_chance < (corner_deg_chance * 2):
+        return tf.rotate(img, 180)
+    if (corner_deg_chance * 2) <= rot_chance < (corner_deg_chance * 3):
+        return tf.rotate(img, 270)
+    return tf.rotate(img, rotate)
 
 
 def img_draw_test(im_arr, im_names, n_imgs):
@@ -280,25 +291,27 @@ for i_fold in range(n_fold):
     model.compile(loss='categorical_crossentropy', optimizer=sgd)
     model.reset_states()
 
-    X_train_cp = np.array(X_train, copy=True)
-    for epoth_i in range(nb_epoch):
-        print('Epoch %d' % epoth_i)
-        rotate_angle = np.random.normal(0, 15, X_train_cp.shape[0])
-        rescale_fac = np.random.normal(1, 0.1, X_train_cp.shape[0])
+    for epoch_i in range(nb_epoch):
+        X_train_cp = np.array(X_train, copy=True)
+        print('Epoch %d' % epoch_i)
+        rotate_angle = np.random.normal(0, 5, X_train_cp.shape[0])
+        rescale_fac = np.random.normal(1, 0.07, X_train_cp.shape[0])
         right_move = np.random.normal(0, 0.07, X_train_cp.shape[0])
         up_move = np.random.normal(0, 0.07, X_train_cp.shape[0])
         for img_i in range(X_train_cp.shape[0]):
-            X_train_cp[img_i, 0] = tf.rotate(X_train_cp[img_i, 0], rotate_angle[img_i], resize=False)
+            X_train_cp[img_i, 0] = img_rotate(X_train_cp[img_i, 0], rotate_angle[img_i], 0.03)
             X_train_cp[img_i, 0] = img_rescale(X_train_cp[img_i, 0], rescale_fac[img_i], )
             X_train_cp[img_i, 0] = img_leftright(X_train_cp[img_i, 0], right_move[img_i])
             X_train_cp[img_i, 0] = img_updown(X_train_cp[img_i, 0], up_move[img_i])
+        # img_draw(X_train_cp[:, 0, :, :], label_encoder.inverse_transform(y_train), 100)
         for batch_i in range(0, X_train_cp.shape[0], batch_size):
-            print(batch_i)
             if (batch_i + batch_size) < X_train_cp.shape[0]:
                 model.train_on_batch(X_train_cp[batch_i: batch_i + batch_size], Y_train[batch_i: batch_i + batch_size],
                                      accuracy=True)
             else:
                 model.train_on_batch(X_train_cp[batch_i:], Y_train[batch_i:], accuracy=True)
+        score = model.evaluate(X_train, Y_train, verbose=0, show_accuracy=True)
+        print('Train score: %.2f, Train accuracy: %.3f' % (score[0], score[1]))
         score = model.evaluate(X_test, Y_test, verbose=0, show_accuracy=True)
         print('Test score: %.2f, Test accuracy: %.3f' % (score[0], score[1]))
     """
@@ -313,9 +326,9 @@ for i_fold in range(n_fold):
     print(label_encoder.inverse_transform(predicted_results))
     print(label_encoder.inverse_transform(y_test))
 
-    unsuccesful_predict = np.logical_not(predicted_results == y_test)
-    img_draw_test(X_test[unsuccesful_predict, 0, :, :], label_encoder.inverse_transform(y_test[unsuccesful_predict]),
-                  debug_n)
+    # unsuccesful_predict = np.logical_not(predicted_results == y_test)
+    # img_draw_test(X_test[unsuccesful_predict, 0, :, :], label_encoder.inverse_transform(y_test[unsuccesful_predict]),
+    #               debug_n)
 if n_fold > 1:
     print('The accuracy is %.3f' % np.mean(acc))
 """
