@@ -262,7 +262,6 @@ for i_fold in range(n_fold):
     model.add(Activation('relu'))
     model.add(MaxPooling2D(pool_size=(nb_pool, nb_pool)))
     model.add(Dropout(0.25))
-    model.add(Activation('relu'))
     model.add(Convolution2D(nb_filters, nb_conv, nb_conv))
     model.add(Activation('relu'))
     model.add(MaxPooling2D(pool_size=(nb_pool, nb_pool)))
@@ -277,23 +276,29 @@ for i_fold in range(n_fold):
     """
     model.add(Dense(nb_classes))
     model.add(Activation('softmax'))
-    sgd = SGD(lr=0.03, decay=1e-5, momentum=0.7, nesterov=True)
+    sgd = SGD(lr=0.03, decay=1e-5, momentum=0.9, nesterov=True)
     model.compile(loss='categorical_crossentropy', optimizer=sgd)
     model.reset_states()
 
     X_train_cp = np.array(X_train, copy=True)
     for epoth_i in range(nb_epoch):
-        print('epoch %d' % epoth_i)
-        rotate_angle = np.random.normal(0, 5, X_train_cp.shape[0])
-        rescale_fac = np.random.normal(1, 0.02, X_train_cp.shape[0])
-        right_move = np.random.normal(0, 0.025, X_train_cp.shape[0])
-        up_move = np.random.normal(0, 0.025, X_train_cp.shape[0])
+        print('Epoch %d' % epoth_i)
+        rotate_angle = np.random.normal(0, 15, X_train_cp.shape[0])
+        rescale_fac = np.random.normal(1, 0.1, X_train_cp.shape[0])
+        right_move = np.random.normal(0, 0.07, X_train_cp.shape[0])
+        up_move = np.random.normal(0, 0.07, X_train_cp.shape[0])
         for img_i in range(X_train_cp.shape[0]):
             X_train_cp[img_i, 0] = tf.rotate(X_train_cp[img_i, 0], rotate_angle[img_i], resize=False)
             X_train_cp[img_i, 0] = img_rescale(X_train_cp[img_i, 0], rescale_fac[img_i], )
             X_train_cp[img_i, 0] = img_leftright(X_train_cp[img_i, 0], right_move[img_i])
             X_train_cp[img_i, 0] = img_updown(X_train_cp[img_i, 0], up_move[img_i])
-        model.train_on_batch(X_train, Y_train, accuracy=True)
+        for batch_i in range(0, X_train_cp.shape[0], batch_size):
+            print(batch_i)
+            if (batch_i + batch_size) < X_train_cp.shape[0]:
+                model.train_on_batch(X_train_cp[batch_i: batch_i + batch_size], Y_train[batch_i: batch_i + batch_size],
+                                     accuracy=True)
+            else:
+                model.train_on_batch(X_train_cp[batch_i:], Y_train[batch_i:], accuracy=True)
         score = model.evaluate(X_test, Y_test, verbose=0, show_accuracy=True)
         print('Test score: %.2f, Test accuracy: %.3f' % (score[0], score[1]))
     """
