@@ -33,30 +33,48 @@ def img_draw(im_arr, im_names, n_imgs):
 
 
 def img_rescale(img, scale):
+    original_y, original_x = img.shape
     if scale > 1:
         img = tf.rescale(img, scale, clip=True)
+        scaled_y, scaled_x = img.shape
+        dx = (scaled_x - original_x) // 2
+        dy = (scaled_y - original_y) // 2
+        img = img[dy: (dy + original_y), dx: (dx + original_x)]
         return img
     else:
         tmp_img = np.zeros(img.shape)
         img = tf.rescale(img, scale)
-        original_y, original_x = tmp_img.shape
         scaled_y, scaled_x = img.shape
-        tmp_img[((original_y - scaled_y) // 2):((original_y + scaled_y) // 2),
-                ((original_x - scaled_x) // 2):((original_x + scaled_x) // 2)] = img
+        tmp_img[((original_y - scaled_y) // 2):((original_y - scaled_y) // 2 + scaled_y),
+                ((original_x - scaled_x) // 2):((original_x - scaled_x) // 2 + scaled_x)] = img
         return tmp_img
 
 
 def img_updown(img, up):
     h = img.shape[0]
-    h = int(h * up)
+    up_pixels = int(h * up)
     tmp_img = np.zeros(img.shape)
+    if up_pixels > 0:
+        tmp_img[up_pixels:, :] = img[: - up_pixels, :]
+    else:
+        if up_pixels < 0:
+            tmp_img[: up_pixels, :] = img[-up_pixels:, :]
+        else:
+            tmp_img = img
     return tmp_img
 
 
 def img_leftright(img, right):
     w = img.shape[1]
-    w = int(w * right)
+    right_pixels = int(w * right)
     tmp_img = np.zeros(img.shape)
+    if right_pixels > 0:
+        tmp_img[right_pixels:, :] = img[: - right_pixels, :]
+    else:
+        if right_pixels < 0:
+            tmp_img[: right_pixels, :] = img[-right_pixels:, :]
+        else:
+            tmp_img = img
     return tmp_img
 
 
@@ -194,7 +212,7 @@ np.random.seed(2016)
 i_part = 1.0 / n_fold
 batch_size = 128
 nb_classes = 62
-nb_epoch = 20
+nb_epoch = 100
 
 np.random.seed(7)
 cv_prob = np.random.sample(train_files_gray.shape[0])
@@ -266,15 +284,18 @@ for i_fold in range(n_fold):
     X_train_cp = np.array(X_train, copy=True)
     for epoth_i in range(nb_epoch):
         print('epoch %d' % epoth_i)
-        rescale_fac = np.random.normal(1, 0.1, X_train_cp.shape[0])
-        right_fac = np.random.normal(0, 0.15, X_train_cp.shape[0])
-        up_fac = np.random.normal(0, 0.15, X_train_cp.shape[0])
+        rotate_angle = np.random.normal(0, 5, X_train_cp.shape[0])
+        rescale_fac = np.random.normal(1, 0.02, X_train_cp.shape[0])
+        right_move = np.random.normal(0, 0.025, X_train_cp.shape[0])
+        up_move = np.random.normal(0, 0.025, X_train_cp.shape[0])
         for img_i in range(X_train_cp.shape[0]):
-            X_train_cp[img_i, :, :] = img_rescale(X_train[img_i, :, :], rescale_fac[img_i])
-            X_train_cp[img_i, :, :] = img_leftright(X_train_cp[img_i, :, :], right_fac[img_i])
-            X_train_cp[img_i, :, :] = img_updown(X_train_cp[img_i, :, :], up_fac[img_i])
+            X_train_cp[img_i, 0] = tf.rotate(X_train_cp[img_i, 0], rotate_angle[img_i], resize=False)
+            X_train_cp[img_i, 0] = img_rescale(X_train_cp[img_i, 0], rescale_fac[img_i], )
+            X_train_cp[img_i, 0] = img_leftright(X_train_cp[img_i, 0], right_move[img_i])
+            X_train_cp[img_i, 0] = img_updown(X_train_cp[img_i, 0], up_move[img_i])
         model.train_on_batch(X_train, Y_train, accuracy=True)
-
+        score = model.evaluate(X_test, Y_test, verbose=0, show_accuracy=True)
+        print('Test score: %.2f, Test accuracy: %.3f' % (score[0], score[1]))
     """
     Get accuracy
     """
