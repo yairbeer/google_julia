@@ -223,7 +223,7 @@ np.random.seed(2016)
 i_part = 1.0 / n_fold
 batch_size = 128
 nb_classes = 62
-nb_epoch = 150
+nb_epoch = 120
 
 np.random.seed(7)
 cv_prob = np.random.sample(train_files_gray.shape[0])
@@ -231,13 +231,13 @@ cv_prob = np.random.sample(train_files_gray.shape[0])
 # input image dimensions
 img_rows, img_cols = img_size, img_size
 # number of convolutional filters to use
-nb_filters = 64
+nb_filters = 32
 # size of pooling area for max pooling
 nb_pool = 2
 # convolution kernel size
 nb_conv = 3
 # lr
-lr_updates = {10: 0.03, 50: 0.01, 100: 0.003}
+lr_updates = {0: 0.03, 40: 0.01, 80: 0.003}
 
 # convert class vectors to binary class matrices
 train_labels_dummy = np_utils.to_categorical(train_labels, nb_classes)
@@ -283,9 +283,9 @@ for i_fold in range(n_fold):
     model.add(Dropout(0.25))
     model.add(Activation('relu'))
     model.add(Flatten())
-    model.add(Dense(256))
+    model.add(Dense(128))
     model.add(Activation('relu'))
-    model.add(Dense(256))
+    model.add(Dense(128))
     model.add(Activation('relu'))
     model.add(Dropout(0.5))
     """
@@ -293,7 +293,7 @@ for i_fold in range(n_fold):
     """
     model.add(Dense(nb_classes))
     model.add(Activation('softmax'))
-    sgd = SGD(lr=0.1, decay=1e-4, momentum=0.9, nesterov=True)
+    sgd = SGD(lr=0.03, decay=1e-4, momentum=0.9, nesterov=True)
     model.compile(loss='categorical_crossentropy', optimizer=sgd)
     model.reset_states()
 
@@ -301,6 +301,7 @@ for i_fold in range(n_fold):
         X_train_cp = np.array(X_train, copy=True)
         print('Epoch %d' % epoch_i)
         if epoch_i in lr_updates:
+            print('lr changed to %f' % lr_updates[epoch_i])
             model.optimizer.lr.set_value(lr_updates[epoch_i])
         np.random.seed(epoch_i)
         rotate_angle = np.random.normal(0, 5, X_train_cp.shape[0])
@@ -361,12 +362,15 @@ model.reset_states()
 for epoch_i in range(nb_epoch):
     X_train_cp = np.array(train_files_gray, copy=True)
     print('Epoch %d' % epoch_i)
+    if epoch_i in lr_updates:
+        print('lr changed to %f' % lr_updates[epoch_i])
+        model.optimizer.lr.set_value(lr_updates[epoch_i])
     np.random.seed(epoch_i)
-    rotate_angle = np.random.normal(0, 10, X_train_cp.shape[0])
+    rotate_angle = np.random.normal(0, 5, X_train_cp.shape[0])
     rescale_fac = np.random.normal(1.05, 0.1, X_train_cp.shape[0])
-    right_move = np.random.normal(0, 0.12, X_train_cp.shape[0])
-    up_move = np.random.normal(0, 0.12, X_train_cp.shape[0])
-    shear = np.random.normal(0, 15, X_train_cp.shape[0])
+    right_move = np.random.normal(0, 0.1, X_train_cp.shape[0])
+    up_move = np.random.normal(0, 0.1, X_train_cp.shape[0])
+    shear = np.random.normal(0, 10, X_train_cp.shape[0])
     shear = np.deg2rad(shear)
     for img_i in range(X_train_cp.shape[0]):
         afine_tf = tf.AffineTransform(shear=shear[img_i])
@@ -379,8 +383,7 @@ for epoch_i in range(nb_epoch):
     for batch_i in range(0, X_train_cp.shape[0], batch_size):
         if (batch_i + batch_size) < X_train_cp.shape[0]:
             model.train_on_batch(X_train_cp[batch_i: batch_i + batch_size],
-                                 train_labels_dummy[batch_i: batch_i + batch_size],
-                                 accuracy=True)
+                                 train_labels_dummy[batch_i: batch_i + batch_size], accuracy=True)
         else:
             model.train_on_batch(X_train_cp[batch_i:], train_labels_dummy[batch_i:], accuracy=True)
 predicted_results = model.predict_classes(test_files_gray, batch_size=batch_size, verbose=1)
