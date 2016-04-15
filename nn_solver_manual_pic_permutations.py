@@ -126,7 +126,7 @@ def rescale_intensity_each(image, low, high):
 """
 Vars
 """
-submit_name = 'ImageDataGenerator_tst.csv'
+submit_name = 'ImageDataGenerator_128.csv'
 debug = False
 n_fold = 2
 debug_n = 100
@@ -231,11 +231,13 @@ cv_prob = np.random.sample(train_files_gray.shape[0])
 # input image dimensions
 img_rows, img_cols = img_size, img_size
 # number of convolutional filters to use
-nb_filters = 32
+nb_filters = 64
 # size of pooling area for max pooling
 nb_pool = 2
 # convolution kernel size
 nb_conv = 3
+# lr
+lr_updates = {10: 0.03, 50: 0.01, 100: 0.003}
 
 # convert class vectors to binary class matrices
 train_labels_dummy = np_utils.to_categorical(train_labels, nb_classes)
@@ -275,13 +277,14 @@ for i_fold in range(n_fold):
     model.add(Dropout(0.25))
     model.add(Convolution2D(nb_filters, nb_conv, nb_conv))
     model.add(Activation('relu'))
+    model.add(Convolution2D(nb_filters, nb_conv, nb_conv))
+    model.add(Activation('relu'))
     model.add(MaxPooling2D(pool_size=(nb_pool, nb_pool)))
     model.add(Dropout(0.25))
     model.add(Activation('relu'))
     model.add(Flatten())
     model.add(Dense(256))
     model.add(Activation('relu'))
-    model.add(Dropout(0.25))
     model.add(Dense(256))
     model.add(Activation('relu'))
     model.add(Dropout(0.5))
@@ -290,13 +293,15 @@ for i_fold in range(n_fold):
     """
     model.add(Dense(nb_classes))
     model.add(Activation('softmax'))
-    sgd = SGD(lr=0.03, decay=1e-5, momentum=0.9, nesterov=True)
+    sgd = SGD(lr=0.1, decay=1e-4, momentum=0.9, nesterov=True)
     model.compile(loss='categorical_crossentropy', optimizer=sgd)
     model.reset_states()
 
     for epoch_i in range(nb_epoch):
         X_train_cp = np.array(X_train, copy=True)
         print('Epoch %d' % epoch_i)
+        if epoch_i in lr_updates:
+            model.optimizer.lr.set_value(lr_updates[epoch_i])
         np.random.seed(epoch_i)
         rotate_angle = np.random.normal(0, 5, X_train_cp.shape[0])
         rescale_fac = np.random.normal(1.05, 0.1, X_train_cp.shape[0])
@@ -335,8 +340,8 @@ for i_fold in range(n_fold):
     print(label_encoder.inverse_transform(y_test))
 
     unsuccesful_predict = np.logical_not(predicted_results == y_test)
-    img_draw_test(X_test[unsuccesful_predict, 0, :, :], label_encoder.inverse_transform(y_test[unsuccesful_predict]),
-                  debug_n)
+    # img_draw_test(X_test[unsuccesful_predict, 0, :, :], label_encoder.inverse_transform(y_test[unsuccesful_predict]),
+    #               debug_n)
 if n_fold > 1:
     print('The accuracy is %.3f' % np.mean(acc))
 """
@@ -357,11 +362,11 @@ for epoch_i in range(nb_epoch):
     X_train_cp = np.array(train_files_gray, copy=True)
     print('Epoch %d' % epoch_i)
     np.random.seed(epoch_i)
-    rotate_angle = np.random.normal(0, 5, X_train_cp.shape[0])
+    rotate_angle = np.random.normal(0, 10, X_train_cp.shape[0])
     rescale_fac = np.random.normal(1.05, 0.1, X_train_cp.shape[0])
-    right_move = np.random.normal(0, 0.1, X_train_cp.shape[0])
-    up_move = np.random.normal(0, 0.1, X_train_cp.shape[0])
-    shear = np.random.normal(0, 10, X_train_cp.shape[0])
+    right_move = np.random.normal(0, 0.12, X_train_cp.shape[0])
+    up_move = np.random.normal(0, 0.12, X_train_cp.shape[0])
+    shear = np.random.normal(0, 15, X_train_cp.shape[0])
     shear = np.deg2rad(shear)
     for img_i in range(X_train_cp.shape[0]):
         afine_tf = tf.AffineTransform(shear=shear[img_i])
